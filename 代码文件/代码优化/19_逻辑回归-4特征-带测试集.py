@@ -3,9 +3,7 @@
 # @Author : 星空噩梦
 # @File ： 19_逻辑回归-4特征-带测试集.py
 # @Software : PyCharm
-'''
-通过四个特征计算逻辑回归，即多特征逻辑回归。
-'''
+
 
 import numpy as np
 import statsmodels.api as sm
@@ -82,7 +80,7 @@ X_pca = pca.fit_transform(X_scaled)
 X_total = X_pca[:, :3]  # shape: (120, 4)
 
 # 标签（你原本就有）
-y = np.array([0] * 58 + [1] * 62)
+y = np.array([1] * 58 + [0] * 62)
 
 # 固定随机种子并打乱数据（确保每次结果一样）
 random_state = 39

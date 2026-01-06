@@ -4,9 +4,6 @@
 # @File ： 20_SVM-4特征-带测试集.py
 # @Software : PyCharm
 
-'''
-采用多特征SVM计算得到结果。
-'''
 import numpy as np
 from sklearn.svm import SVC
 from sklearn.model_selection import StratifiedKFold
@@ -82,7 +79,7 @@ X_pca = pca.fit_transform(X_scaled)
 X_total = X_pca[:, :3]  # shape: (120, 4)
 
 # 标签（你原本就有）
-y = np.array([0] * 58 + [1] * 62)
+y = np.array([1] * 58 + [0] * 62)
 
 # 固定随机种子并打乱数据（确保每次结果一样）
 random_state = 39

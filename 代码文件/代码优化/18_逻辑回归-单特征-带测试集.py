@@ -3,14 +3,12 @@
 # @Author : 星空噩梦
 # @File ： 18_逻辑回归-单特征-带测试集.py
 # @Software : PyCharm
-'''
-采用五折验证法，计算每个特征的逻辑回归，会输出准确率，精确率，召回率，F1分数
-'''
 
 import numpy as np
 import statsmodels.api as sm
 from sklearn.model_selection import KFold
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import Binarizer
 
 first1=[0.9241962407465936, 0.9730153045878215, 1.0535650646483086, 1.365368986133295, 1.1752045970807576, 1.356986344060514, 0.8717833176685523, 1.1058898790247633, 0.9730153045878216, 0.9241962407465936, 0.9760325029430748, 0.9760325029430749, 0.9730153045878215, 1.0782289475376925, 1.2047933096947843, 1.001212594142143, 0.7720108303894594, 1.001212594142143, 1.1843146422534945, 1.001212594142143, 1.2613309956490442, 1.001212594142143, 0.9730153045878216, 0.9760325029430748, 0.984250346592314, 1.0104127537805416, 1.1490421898925305, 0.9410980357245469, 1.0782289475376925, 0.9179365526126058, 1.118941026810968, 1.0575792300677742, 0.9241962407465936, 0.8456209104803251, 0.8717833176685522, 1.1836750456374339, 0.8456209104803251, 1.09140165082336, 0.8092054732283176, 1.1836750456374336, 0.8024685996125578, 0.845620910480325, 1.0104127537805414, 0.6376767563123414, 1.0184387897117868, 1.2648667490341141, 0.7720108303894594, 1.5388340843440491, 1.1124565824765003, 1.0365751609687686, 1.1072982888579452, 1.2904003369692967, 1.1699052597668589, 0.9241962407465936, 0.9210689672752428, 1.0535650646483086, 0.9842503465923143, 0.8944857758183755]
@@ -56,90 +54,73 @@ fifth2=[ 0.1575917 ,  0.66618983,  0.83014942,  1.69712516,  1.66158788,
         0.24067752,  0.27606243,  0.01115049,  1.00785895,  0.45968335,
         0.84272742, -0.26365655]
 
-
-first = first1 + first2      # 合并后长度 120
-second = second1 + second2   # 合并后长度 120
-third = third1 + third2      # 合并后长度 120
-fourth = fourth1 + fourth2    # 合并后长度 120
-fifth = fifth1 + fifth2      # 合并后长度 120
+first  = first1 + first2
+second = second1 + second2
+third  = third1 + third2
+fourth = fourth1 + fourth2
+fifth  = fifth1 + fifth2
 
 features = [first, second, third, fourth, fifth]
 feature_names = ['first', 'second', 'third', 'fourth', 'fifth']
 
-# 标签
-y = np.array([0] * 58 + [1] * 62)
-
-# 构建总特征矩阵（shape: 120 x 5）
+y = np.array([1] * 58 + [0] * 62)
 X_total = np.column_stack(features)
 
-# 固定随机种子并打乱数据
+# 固定随机种子并打乱（建议用 RandomState，避免全局随机状态被污染）
 random_state = 39
-np.random.seed(random_state)
-shuffle_idx = np.random.permutation(len(y))
+rng = np.random.RandomState(random_state)
+shuffle_idx = rng.permutation(len(y))
 X_total = X_total[shuffle_idx]
 y = y[shuffle_idx]
 
-# 记录每个特征的平均指标
-averages = {
-    'Accuracy': [],
-    'Precision': [],
-    'Recall': [],
-    'F1-Score': []
-}
+averages = {'Accuracy': [], 'Precision': [], 'Recall': [], 'F1-Score': []}
 
-# 遍历每个单独特征
+kf = KFold(n_splits=5, shuffle=False)
+
 for i, name in enumerate(feature_names):
     X_feature = X_total[:, i].reshape(-1, 1)
 
-    # 设置 KFold（不再 shuffle，因为已打乱）
-    kf = KFold(n_splits=5, shuffle=False)
+    fold_accuracies, fold_precisions, fold_recalls, fold_f1_scores = [], [], [], []
 
-    fold_accuracies = []
-    fold_precisions = []
-    fold_recalls = []
-    fold_f1_scores = []
-
-    # 开始五折训练
     for train_idx, test_idx in kf.split(X_feature):
-        X_train, X_test = X_feature[train_idx], X_feature[test_idx]
+        X_train_raw, X_test_raw = X_feature[train_idx], X_feature[test_idx]
         y_train, y_test = y[train_idx], y[test_idx]
 
-        # 在train数据中加上常数项（intercept）
-        X_train_sm = sm.add_constant(X_train)  # 添加常数项
-        X_test_sm = sm.add_constant(X_test)  # 测试集也需要加常数项
+        # ✅ 折内标准化：只在训练集 fit
+        scaler = StandardScaler()
+        X_train = scaler.fit_transform(X_train_raw)
+        X_test  = scaler.transform(X_test_raw)
 
-        # 训练Logit模型
+        # statsmodels 需要手动加截距项
+        X_train_sm = sm.add_constant(X_train, has_constant='add')
+        X_test_sm  = sm.add_constant(X_test,  has_constant='add')
+
+        # 训练 Logit
         model = sm.Logit(y_train, X_train_sm)
-        result = model.fit(disp=0)  # fit时不显示输出
+        result = model.fit(disp=0)
 
         # 预测
-        y_test_pred_prob = result.predict(X_test_sm)  # 输出预测的概率
-        y_test_pred = (y_test_pred_prob >= 0.5).astype(int)  # 将概率转为0/1预测
+        y_prob = result.predict(X_test_sm)
+        y_pred = (y_prob >= 0.5).astype(int)
 
-        # 计算各项指标
-        acc = accuracy_score(y_test, y_test_pred)
-        pre = precision_score(y_test, y_test_pred, zero_division=0)
-        rec = recall_score(y_test, y_test_pred, zero_division=0)
-        f1 = f1_score(y_test, y_test_pred, zero_division=0)
+        acc = accuracy_score(y_test, y_pred)
+        pre = precision_score(y_test, y_pred, zero_division=0)
+        rec = recall_score(y_test, y_pred, zero_division=0)
+        f1  = f1_score(y_test, y_pred, zero_division=0)
 
         fold_accuracies.append(acc)
         fold_precisions.append(pre)
         fold_recalls.append(rec)
         fold_f1_scores.append(f1)
 
-    # 计算该特征的平均值
-    avg_acc = np.mean(fold_accuracies)
-    avg_pre = np.mean(fold_precisions)
-    avg_rec = np.mean(fold_recalls)
-    avg_f1 = np.mean(fold_f1_scores)
+    averages['Accuracy'].append(np.mean(fold_accuracies))
+    averages['Precision'].append(np.mean(fold_precisions))
+    averages['Recall'].append(np.mean(fold_recalls))
+    averages['F1-Score'].append(np.mean(fold_f1_scores))
 
-    # 保存该特征的平均指标
-    averages['Accuracy'].append(avg_acc)
-    averages['Precision'].append(avg_pre)
-    averages['Recall'].append(avg_rec)
-    averages['F1-Score'].append(avg_f1)
-
-# 输出五折交叉验证平均结果
-print("五折交叉验证 - 各特征平均结果：")
+print("五折交叉验证 - 各单特征（折内标准化）平均结果：")
 for i, name in enumerate(feature_names):
-    print(f"{name:<10} | Accuracy: {averages['Accuracy'][i]:.4f} | Precision: {averages['Precision'][i]:.4f} | Recall: {averages['Recall'][i]:.4f} | F1-Score: {averages['F1-Score'][i]:.4f}")
+    print(f"{name:<10} | Accuracy: {averages['Accuracy'][i]:.4f} | "
+          f"Precision: {averages['Precision'][i]:.4f} | "
+          f"Recall: {averages['Recall'][i]:.4f} | "
+          f"F1-Score: {averages['F1-Score'][i]:.4f}")
